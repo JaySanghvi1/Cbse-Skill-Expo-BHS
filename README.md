@@ -9,7 +9,7 @@
 - 🎓 &nbsp; Studying Computer Science, programming, and Mathematics  
 - 💼 &nbsp; Android developer and front-end web developer  
 - 🌱 &nbsp; Enthusiast in Cyber Security and Artificial Intelligence  
-- ✍️ &nbsp; Watching anime and exploring the latest UI/UX design trends  
+- ✍️ &nbsp; Exploring the latest UI/UX design trends  
 - ☕ &nbsp; I believe a perfect cup of coffee can be the ultimate stress-buster  
 
 <h3>🛠 Tech Stack</h3>
@@ -21,9 +21,6 @@
 - 🖥 &nbsp; Adobe XD | Illustrator | Photoshop | OpenShot  
 
 <br>
-
-<img align="center" src="https://github-readme-stats.vercel.app/api?username=devSouvik&include_all_commits=true&count_private=true&show_icons=true&line_height=20&title_color=7A7ADB&icon_color=2234AE&text_color=D3D3D3&bg_color=0,000000,130F40" alt="Jay's Github Stats">
-
 </br>
 
 [![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=devSouvik&layout=compact&text_color=daf7dc&bg_color=151515)](https://github.com/devSouvik/github-readme-stats)
