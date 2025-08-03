@@ -1,140 +1,88 @@
-#include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
-#include <DHT.h>
+#include <SoftwareSerial.h>
 
-// OLED
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+#define trigPin 2
+#define echoPin 3
+#define mq2Pin A0
+#define ledPin 6
+#define buzzerPin 7
 
-// DHT Sensor
-#define DHTPIN 2
-#define DHTTYPE DHT11
-DHT dht(DHTPIN, DHTTYPE);
-
-// Sensor Pins
-#define MQ_PIN A0
-#define FLOOD_PIN A1
-#define BUZZER_PIN 4
-#define LED_PIN 5
-
-// MQ2 Constants
-#define GAS_LPG     0
-#define GAS_CO      1
-#define GAS_SMOKE   2
-
-float Ro = 10.0;
-float LPGCurve[3]   = {2.3, 0.21, -0.47};
-float COCurve[3]    = {2.3, 0.72, -0.34};
-float SmokeCurve[3] = {2.3, 0.53, -0.44};
-
-float MQRead(int pin) {
-  float rs = 0;
-  for (int i = 0; i < 5; i++) {
-    rs += analogRead(pin);
-    delay(50);
-  }
-  return rs / 5;
-}
-
-float MQGetGasPercentage(float rs_ro_ratio, int gas_id) {
-  float x = 0;
-  if (gas_id == GAS_LPG)
-    x = ((log10(rs_ro_ratio) - LPGCurve[1]) / LPGCurve[2]);
-  else if (gas_id == GAS_CO)
-    x = ((log10(rs_ro_ratio) - COCurve[1]) / COCurve[2]);
-  else if (gas_id == GAS_SMOKE)
-    x = ((log10(rs_ro_ratio) - SmokeCurve[1]) / SmokeCurve[2]);
-  return pow(10, x);
-}
-
-void displayOLED(float temp, float hum, float lpg, float co, float smoke, bool flood, String airStatus) {
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-
-  display.setCursor(0, 0);
-  display.print("T: "); display.print(temp); display.print("C ");
-  display.print("H: "); display.print(hum); display.println("%");
-
-  display.setCursor(0, 16);
-  display.print("LPG: "); display.print(lpg); display.print(" CO: "); display.print(co);
-
-  display.setCursor(0, 32);
-  display.print("Smoke: "); display.print(smoke);
-
-  display.setCursor(0, 48);
-  display.print("Flood: "); display.print(flood ? "YES" : "NO");
-  display.print(" AQ: "); display.println(airStatus);
-
-  display.display();
-}
-
-void sendToSerial(float temp, float hum, float lpg, float co, float smoke, bool flood, String airStatus) {
-  Serial.print("Temp: "); Serial.print(temp); Serial.print("C | ");
-  Serial.print("Humidity: "); Serial.print(hum); Serial.print("% | ");
-  Serial.print("LPG: "); Serial.print(lpg); Serial.print(" ppm | ");
-  Serial.print("CO: "); Serial.print(co); Serial.print(" ppm | ");
-  Serial.print("Smoke: "); Serial.print(smoke); Serial.print(" ppm | ");
-  Serial.print("Flood: "); Serial.print(flood ? "YES" : "NO"); Serial.print(" | ");
-  Serial.print("Air: "); Serial.println(airStatus);
-}
+SoftwareSerial bluetooth(4, 5); // RX, TX
 
 void setup() {
-  Serial.begin(9600);
-  dht.begin();
-  pinMode(BUZZER_PIN, OUTPUT);
-  pinMode(LED_PIN, OUTPUT);
-  digitalWrite(BUZZER_PIN, LOW);
-  digitalWrite(LED_PIN, LOW);
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  pinMode(mq2Pin, INPUT);
+  pinMode(ledPin, OUTPUT);
+  pinMode(buzzerPin, OUTPUT);
 
-  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-    while (true); // hang
-  }
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(0, 20);
-  display.println("Initializing...");
-  display.display();
-  delay(2000);
+  Serial.begin(9600);
+  bluetooth.begin(9600);
+
+  Serial.println("Weather Station Started");
+  bluetooth.println("मौसम केंद्र प्रारंभ हुआ | Weather Station Started");
 }
 
 void loop() {
-  float temperature = dht.readTemperature();
-  float humidity = dht.readHumidity();
-  
-  int floodValue = analogRead(FLOOD_PIN); // 0-1023
-  bool floodDetected = floodValue < 300;
+  // Measure distance
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
 
-  float rs = MQRead(MQ_PIN);
-  float rs_ro = rs / Ro;
+  long duration = pulseIn(echoPin, HIGH, 30000); // 30ms timeout
+  float distance = duration * 0.034 / 2;
 
-  float lpg = MQGetGasPercentage(rs_ro, GAS_LPG);
-  float co = MQGetGasPercentage(rs_ro, GAS_CO);
-  float smoke = MQGetGasPercentage(rs_ro, GAS_SMOKE);
+  // Read gas
+  int mq2Value = analogRead(mq2Pin);
+  float gasLevel = map(mq2Value, 0, 1023, 0, 100);
 
-  String airStatus = "Good";
-  bool gasDanger = false;
+  float temperature = 28.5; // Dummy values
+  float humidity = 62.0;
 
-  if (lpg > 1000 || co > 30 || smoke > 300) {
-    airStatus = "DANGER";
-    gasDanger = true;
-  } else if (lpg > 400 || co > 10 || smoke > 150) {
-    airStatus = "Moderate";
-  }
+  String status = "";
+  String statusHindi = "";
 
-  // Alert logic
-  if (floodDetected || gasDanger) {
-    digitalWrite(BUZZER_PIN, HIGH);
-    digitalWrite(LED_PIN, HIGH);
+  // Default: safe
+  digitalWrite(ledPin, LOW);
+  digitalWrite(buzzerPin, LOW);
+
+  // VALID DISTANCE
+  if (distance > 0 && distance < 400) {
+    if (distance > 10) {
+      status = "✅ Safe";
+      statusHindi = "सुरक्षित";
+    } else if (distance > 6) {
+      status = "⚠️ Yellow Alert (Evacuate)";
+      statusHindi = "⚠️ पीला अलर्ट (स्थान खाली करें)";
+    } else {
+      status = "🔴 Severe Flood Alert!";
+      statusHindi = "🔴 गंभीर बाढ़!";
+      digitalWrite(ledPin, HIGH);
+      digitalWrite(buzzerPin, HIGH); // Only here buzzer ON
+    }
   } else {
-    digitalWrite(BUZZER_PIN, LOW);
-    digitalWrite(LED_PIN, LOW);
+    status = "📡 No reading or out of range";
+    statusHindi = "📡 रीडिंग नहीं मिली";
   }
 
-  displayOLED(temperature, humidity, lpg, co, smoke, floodDetected, airStatus);
-  sendToSerial(temperature, humidity, lpg, co, smoke, floodDetected, airStatus);
+  // Print to serial
+  Serial.println("------ WEATHER STATION ------");
+  Serial.print("Flood Distance: "); Serial.print(distance); Serial.println(" cm");
+  Serial.print("Flood Status: "); Serial.println(status);
+  Serial.print("Temperature: "); Serial.print(temperature); Serial.println(" °C");
+  Serial.print("Humidity: "); Serial.print(humidity); Serial.println(" %");
+  Serial.print("Gas Level (MQ-2): "); Serial.print(gasLevel); Serial.println(" %");
+  Serial.println();
+
+  // Send to Bluetooth
+  bluetooth.println("---- मौसम केंद्र डेटा ----");
+  bluetooth.print("बाढ़ दूरी: "); bluetooth.print(distance); bluetooth.println(" सेमी");
+  bluetooth.print("स्थिति: "); bluetooth.println(statusHindi);
+  bluetooth.print("तापमान: "); bluetooth.print(temperature); bluetooth.println(" °से");
+  bluetooth.print("नमी: "); bluetooth.print(humidity); bluetooth.println(" %");
+  bluetooth.print("गैस स्तर: "); bluetooth.print(gasLevel); bluetooth.println(" %");
+  bluetooth.println();
 
   delay(2000);
 }
