@@ -21,6 +21,7 @@ DHT dht(DHTPIN, DHTTYPE);
 #define MOTOR_IN2 27
 #define MOTOR_IN3 26
 #define MOTOR_IN4 25
+const unsigned long MOTOR_PULSE_DURATION_MS = 300;
 
 // Web server and WebSocket server
 WebServer server(80);
@@ -598,8 +599,12 @@ const char* HTML_CONTENT = R"rawliteral(
 void sendSensorData();
 void handleWebSocketMessage(uint8_t num, WStype_t type, uint8_t *payload, size_t length);
 void controlMotor(char command);
+void stopMotors();
 void printSystemInfo();
 String generateAdvice();
+
+unsigned long motorStopDeadlineMs = 0;
+bool motorPulseActive = false;
 
 void setup() {
     Serial.begin(115200);
@@ -686,6 +691,11 @@ void loop() {
     
     // Handle WebSocket
     webSocket.loop();
+
+    if (motorPulseActive && (long)(millis() - motorStopDeadlineMs) >= 0) {
+        stopMotors();
+        motorPulseActive = false;
+    }
     
     // Update NPK sensor simulation
     npkSensor.update();
@@ -823,37 +833,50 @@ void handleWebSocketMessage(uint8_t num, WStype_t type, uint8_t *payload, size_t
     }
 }
 
-void controlMotor(char command) {
-    Serial.println("🤖 Motor command: " + String(command));
-    
-    // Stop all motors first
+void stopMotors() {
     digitalWrite(MOTOR_IN1, LOW);
     digitalWrite(MOTOR_IN2, LOW);
     digitalWrite(MOTOR_IN3, LOW);
     digitalWrite(MOTOR_IN4, LOW);
+}
+
+void controlMotor(char command) {
+    Serial.println("🤖 Motor command: " + String(command));
+    
+    // Stop any current motion before applying the new command
+    stopMotors();
+    motorPulseActive = false;
     
     switch (command) {
         case 'F': // Forward
             digitalWrite(MOTOR_IN1, HIGH);
             digitalWrite(MOTOR_IN3, HIGH);
+            motorStopDeadlineMs = millis() + MOTOR_PULSE_DURATION_MS;
+            motorPulseActive = true;
             Serial.println("⬆️ Moving Forward");
             break;
             
         case 'B': // Backward
             digitalWrite(MOTOR_IN2, HIGH);
             digitalWrite(MOTOR_IN4, HIGH);
+            motorStopDeadlineMs = millis() + MOTOR_PULSE_DURATION_MS;
+            motorPulseActive = true;
             Serial.println("⬇️ Moving Backward");
             break;
             
         case 'L': // Left
             digitalWrite(MOTOR_IN1, HIGH);
             digitalWrite(MOTOR_IN4, HIGH);
+            motorStopDeadlineMs = millis() + MOTOR_PULSE_DURATION_MS;
+            motorPulseActive = true;
             Serial.println("⬅️ Turning Left");
             break;
             
         case 'R': // Right
             digitalWrite(MOTOR_IN2, HIGH);
             digitalWrite(MOTOR_IN3, HIGH);
+            motorStopDeadlineMs = millis() + MOTOR_PULSE_DURATION_MS;
+            motorPulseActive = true;
             Serial.println("➡️ Turning Right");
             break;
             
